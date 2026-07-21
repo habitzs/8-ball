@@ -366,3 +366,17 @@
     #intro.leave .intro-card{ transform:none; }
     .die{ transition:opacity .3s ease; }
   }
+
+  /* ---------- rylan easter egg: ASCII rain ---------- */
+  #rain{
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    pointer-events:none;
+    z-index:0;                     /* behind everything except body */
+    opacity:0;
+    transition:opacity 1.2s ease;
+  }
+  body.rylan-time #rain{ opacity:1; }
+  body.rylan-time .aura,
+  body.rylan-time #djo-hand,
+  body.rylan-time .halo{ opacity:0 !important; }
