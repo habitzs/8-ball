@@ -2,22 +2,19 @@
   "use strict";
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* ---------- starfield (disabled) ---------- */
-  // stars removed — background stays pure black
-
-  /* ---------- answers ---------- */
+  /*answers*/
   const ANSWERS=[
     "It is certain","It is decidedly so","Without a doubt","Yes — definitely",
     "You may rely on it","As I see it, yes","Most likely","Outlook good",
-    "Yes","Signs point to yes",
+    "Yes","Signs point to yes","Take it point blank","6 maybe 7?",
     "Reply hazy, try again","Ask again later","Better not tell you now",
-    "Cannot predict now","Concentrate and ask again",
+    "Maybe in 5?","Concentrate and ask again",
     "Don't count on it","My reply is no","My sources say no",
-    "Outlook not so good","Very doubtful"
+    "Outlook not so good","Very doubtful","What about no?","I'm telling you no...",
   ];
   let lastAnswer=-1;
 
-  /* ---------- elements & state ---------- */
+  /* elements & state */
   const ball=document.getElementById("ball");
   const sphere=document.getElementById("sphere");
   const die=document.getElementById("die");
@@ -46,6 +43,7 @@
     clampPos();
     if(introOn){ sizeRays(); seedRays(); }
     if(typeof djoActive!=="undefined" && djoActive) layoutDjo();
+    if(typeof rylanActive!=="undefined" && rylanActive){ sizeRain(); seedRain(); }
   });
 
   /* ---------- pointer handling ---------- */
@@ -94,7 +92,7 @@
     if(e.key==="Enter"||e.key===" "){ e.preventDefault(); churn(); }
   });
 
-  /* ---------- the churn: fade in the next answer ---------- */
+  /*the churn: fade in the next answer */
   const question=document.getElementById("question");
   let djoActive=false;
   let homeX=null, homeY=null;      // custom homing target while djo is active
@@ -102,9 +100,131 @@
   // Custom answer triggers — first match wins. `effect: "djo"` also plays the halo/hand.
   const TRIGGERS = [
     { pattern:/\bdjo\b/i,     answer:"It's Djo time", effect:"djo" },
-    { pattern:/\bdecide\b/i,  answer:"Change",        effect:"djo" },
-    { pattern:/\brylan\b/i,   answer:"I love you most baby" },
+    { pattern:/\bdecide\b/i,  answer:"Change",        effect:"djo",   song:"change-audio" },
+    { pattern:/\brylan\b/i,   answer:"I love you most baby", effect:"rylan", song:"keepdriving-audio" },
   ];
+
+  /* ---------- audio ---------- */
+  const AUDIO = {
+    "change-audio": document.getElementById("change-audio"),
+    "keepdriving-audio": document.getElementById("keepdriving-audio"),
+  };
+  function playSong(id){
+    // stop anything currently playing, then start the requested track
+    stopAllSongs();
+    const a = AUDIO[id];
+    if(!a) return;
+    try{
+      a.currentTime = 0;
+      const p = a.play();
+      if(p && p.catch) p.catch(()=>{});
+    }catch(e){}
+  }
+  function stopAllSongs(){
+    for(const id in AUDIO){
+      const a = AUDIO[id];
+      if(!a) continue;
+      try{ a.pause(); a.currentTime = 0; }catch(e){}
+    }
+  }
+
+  /* ---------- rylan: ASCII ripples ---------- */
+  const rainEl=document.getElementById("rain");
+  const rctx2=rainEl.getContext("2d");
+  const RIPPLE_CHARS=[".","·","'","`",",",":"];
+  let ripples=[];
+  let rainOn=false;
+  let rylanActive=false;
+  let rippleTimer=0;
+
+  function sizeRain(){
+    const dpr=Math.min(devicePixelRatio||1, 2);
+    rainEl.width=W*dpr; rainEl.height=H*dpr;
+    rainEl.style.width=W+"px"; rainEl.style.height=H+"px";
+    rctx2.setTransform(dpr,0,0,dpr,0,0);
+    rctx2.font="14px ui-monospace, Menlo, Consolas, monospace";
+    rctx2.textBaseline="middle";
+    rctx2.textAlign="center";
+  }
+  function seedRain(){
+    ripples=[];
+    // seed a few in-progress ripples so the field looks alive immediately
+    for(let i=0;i<3;i++) spawnRipple(Math.random()*40);
+  }
+  function spawnRipple(startR){
+    ripples.push({
+      x: 30 + Math.random()*(W-60),
+      y: 30 + Math.random()*(H-60),
+      r: startR||1,
+      maxR: 55 + Math.random()*130,
+      speed: 0.35 + Math.random()*0.7,
+      ch: RIPPLE_CHARS[Math.floor(Math.random()*RIPPLE_CHARS.length)],
+    });
+  }
+  function drawRain(){
+    if(!rainOn) return;
+    rctx2.clearRect(0,0,W,H);
+
+    // spawn new ripples over time
+    rippleTimer++;
+    if(rippleTimer > 14 && ripples.length < 22){
+      rippleTimer = 0;
+      spawnRipple(1);
+      if(Math.random()<0.35) spawnRipple(1);          // occasional second drop
+    }
+
+    for(let i=ripples.length-1; i>=0; i--){
+      const rp = ripples[i];
+      rp.r += rp.speed;
+      const life = 1 - (rp.r / rp.maxR);
+      if(life <= 0){ ripples.splice(i,1); continue; }
+
+      // ring of characters around the current radius
+      const outerAlpha = Math.min(1, life * 1.1);
+      const count = Math.max(8, Math.floor(2*Math.PI*rp.r / 11));
+      rctx2.fillStyle = "rgba(180,205,255," + (outerAlpha*0.85).toFixed(3) + ")";
+      for(let k=0;k<count;k++){
+        const a = (k/count)*Math.PI*2;
+        const px = rp.x + Math.cos(a)*rp.r;
+        const py = rp.y + Math.sin(a)*rp.r;
+        rctx2.fillText(rp.ch, px, py);
+      }
+
+      // inner echo ring at ~60% radius
+      if(rp.r > 16){
+        const echoR = rp.r*0.6;
+        const echoCount = Math.max(6, Math.floor(2*Math.PI*echoR / 12));
+        rctx2.fillStyle = "rgba(160,190,255," + (outerAlpha*0.35).toFixed(3) + ")";
+        for(let k=0;k<echoCount;k++){
+          const a = (k/echoCount)*Math.PI*2 + 0.15;   // slight offset
+          const px = rp.x + Math.cos(a)*echoR;
+          const py = rp.y + Math.sin(a)*echoR;
+          rctx2.fillText(".", px, py);
+        }
+      }
+
+      // impact point while the ripple is young
+      if(rp.r < 9){
+        rctx2.fillStyle = "rgba(220,235,255," + (0.9 - rp.r*0.1).toFixed(3) + ")";
+        rctx2.fillText("*", rp.x, rp.y);
+      }
+    }
+    requestAnimationFrame(drawRain);
+  }
+  function startRain(){
+    if(rylanActive) return;
+    rylanActive=true;
+    document.body.classList.add("rylan-time");
+    sizeRain();
+    seedRain();
+    if(!rainOn){ rainOn=true; requestAnimationFrame(drawRain); }
+  }
+  function stopRain(){
+    if(!rylanActive) return;
+    rylanActive=false;
+    document.body.classList.remove("rylan-time");
+    setTimeout(()=>{ if(!rylanActive){ rainOn=false; rctx2.clearRect(0,0,W,H); ripples=[]; } }, 1300);
+  }
 
   function layoutDjo(){
     const hand=document.getElementById("djo-hand");
@@ -144,10 +264,14 @@
       let a;
       if(trigger){
         a = trigger.answer;
-        if(trigger.effect === "djo") triggerDjo();
-        else if(djoActive) clearDjo();
+        // apply the trigger's effect(s)
+        if(trigger.effect === "djo") triggerDjo(); else if(djoActive) clearDjo();
+        if(trigger.effect === "rylan") startRain(); else if(rylanActive) stopRain();
+        if(trigger.song) playSong(trigger.song); else stopAllSongs();
       } else {
         if(djoActive) clearDjo();
+        if(rylanActive) stopRain();
+        stopAllSongs();
         let i;
         do{ i=Math.floor(Math.random()*ANSWERS.length); }while(i===lastAnswer);
         lastAnswer=i;
